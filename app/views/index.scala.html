@@ -1,0 +1,40 @@
+@(ip: String)
+
+@main(ip) {
+    <div class="page-header"></div>
+    <div id="onError" class="alert-message error"><p><strong>Oops!</strong> <span></span></p></div>
+    
+    <script src="http://www.html5canvastutorials.com/libraries/kinetic-v4.0.3.js"></script>
+    <script type="text/javascript" charset="utf-8">
+		window.onload = function() {
+			var stage = new Kinetic.Stage({container: 'stage', width: 800, height: 600});
+			var bgLayer = new Kinetic.Layer();
+			var bgObject = new Kinetic.Rect({x: 0, y: 0, width: stage.getWidth(), height: stage.getHeight(), fill: 'lightgray'});
+			bgObject.on('mousedown', function() {
+                var mousePos = stage.getMousePosition();
+                socket.send(JSON.stringify({x : mousePos.x, y : mousePos.y}));
+            });
+            bgObject.moveToBottom();
+			bgLayer.add(bgObject);
+			stage.add(bgLayer);
+
+            var fgLayer = new Kinetic.Layer();
+			var socketType = window['MozWebSocket'] ? MozWebSocket: WebSocket;
+			var socket = new socketType("@routes.Application.joinMainRoom(ip).webSocketURL(request)");
+			socket.onmessage = function(event) {
+				var data = JSON.parse(event.data)
+				if (data.error) {
+					socket.close()
+					$("#onError span").text(data.error)
+					$("#onError").show()
+					return
+				}
+				var fgObject = new Kinetic.Circle({x: data.x, y: data.y, radius: 2, fill: 'black', strokeWidth: 0});
+				fgLayer.add(fgObject);
+				fgLayer.draw();
+			}
+			stage.add(fgLayer);
+		};
+	</script>
+    <div id="stage"></div>
+}

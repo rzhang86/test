@@ -1,0 +1,37 @@
+@(connected: String)(content: Html)
+
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>ray's websocket test</title>
+        <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/bootstrap.css")">
+        <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
+        <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
+        <script src="@routes.Assets.at("javascripts/jquery-1.7.1.min.js")" type="text/javascript"></script>
+        
+        <style>#stage {border: 1px solid #9C9898;}</style>
+    </head>
+    <body>
+        <div class="topbar">
+            <div class="fill">
+                <div class="container">
+                    <a class="brand" href="@routes.Application.index()">ray's websocket test</a>
+                    @if(connected != null) {
+                        <p class="pull-right">Your IP is @connected</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="container">
+            <div class="content">
+                @content
+            </div>
+            <footer>
+                <p>
+                    <a href="">todo, link</a>
+                </p>
+            </footer>
+        </div>
+    </body>
+</html>
