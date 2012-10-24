@@ -4,26 +4,23 @@
 # --- !Ups
 
 create table stroke (
-  id                        bigint not null,
+  id                        bigint auto_increment not null,
   ip                        varchar(255),
-  date                      timestamp,
+  name                      varchar(255),
+  date_time                 datetime,
   x                         integer,
   y                         integer,
   constraint pk_stroke primary key (id))
 ;
-
-create sequence stroke_seq;
 
 
 
 
 # --- !Downs
 
-SET REFERENTIAL_INTEGRITY FALSE;
+SET FOREIGN_KEY_CHECKS=0;
 
-drop table if exists stroke;
+drop table stroke;
 
-SET REFERENTIAL_INTEGRITY TRUE;
-
-drop sequence if exists stroke_seq;
+SET FOREIGN_KEY_CHECKS=1;
 

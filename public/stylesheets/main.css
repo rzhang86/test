@@ -8,7 +8,7 @@ body {
     text-align: center; /* center align it with the container */
 }
 .container {
-    width: 820px; /* downsize our container to make the content feel a bit tighter and more cohesive. NOTE: this removes two full columns from the grid, meaning you only go to 14 columns and not 16. */
+    width: 800px; /* downsize our container to make the content feel a bit tighter and more cohesive. NOTE: this removes two full columns from the grid, meaning you only go to 14 columns and not 16. */
 }
 
 /* The white background content wrapper */
@@ -27,7 +27,7 @@ body {
 
 /* Page header tweaks */
 .page-header {
-    background-color: #f5f5f5;
+    background-color: #eee;
     padding: 20px 20px 10px;
     margin: -20px -20px 20px;
 }

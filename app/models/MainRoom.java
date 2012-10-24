@@ -16,6 +16,9 @@ import java.util.*;
 
 import static java.util.concurrent.TimeUnit.*;
 
+//import controllers.Application;
+import models.Stroke;
+
 public class MainRoom extends UntypedActor {
 	static ActorRef defaultRoom = Akka.system().actorOf(new Props(MainRoom.class));
 
@@ -25,12 +28,17 @@ public class MainRoom extends UntypedActor {
         new Robot(defaultRoom);
     }*/
 
-	public static void join(final String ip, WebSocket.In<JsonNode> in, WebSocket.Out<JsonNode> out) throws Exception {
+	public static void join(final String ip, final WebSocket.In<JsonNode> in, final WebSocket.Out<JsonNode> out) throws Exception {
 		String result = (String) Await.result(ask(defaultRoom, new Join(ip, out), 1000), Duration.create(1, SECONDS));
 		if(result.equals("OK")) {
 			in.onMessage(new Callback<JsonNode>() {
 				public void invoke(JsonNode event) {
-					defaultRoom.tell(new Draw(ip, event.get("x").asText(), event.get("y").asText()));
+					try {
+						attemptDraw(ip, event.get("name").asText(), event.get("x").asText(), event.get("y").asText(), out);
+					}
+					catch (Exception e) {
+						e.printStackTrace();
+					}
 				} 
 			});
 			
@@ -41,9 +49,24 @@ public class MainRoom extends UntypedActor {
 			});
 		}
 		else {
-			ObjectNode error = Json.newObject();
-			error.put("error", result);
-			out.write(error);
+			ObjectNode jsonNode = Json.newObject();
+			jsonNode.put("error", result);
+			out.write(jsonNode);
+		}
+	}
+	
+	public static void attemptDraw(final String ip, final String name, final String x, final String y, final WebSocket.Out<JsonNode> out) throws Exception {
+		long timeTilReady = (long) Await.result(ask(defaultRoom, new AttemptDraw(ip, name, x, y), 1000), Duration.create(1, SECONDS));
+		if(timeTilReady < 0) {
+			defaultRoom.tell(new Draw(name, x, y));
+			ObjectNode jsonNode = Json.newObject();
+			jsonNode.put("newStrokeTime", System.currentTimeMillis());
+			out.write(jsonNode);
+		}
+		else {
+			ObjectNode jsonNode = Json.newObject();
+			jsonNode.put("timeTilReady", timeTilReady);
+			out.write(jsonNode);
 		}
 	}
 
@@ -53,24 +76,52 @@ public class MainRoom extends UntypedActor {
 		if(message instanceof Join) {
 			Join join = (Join) message;
 			members.put(join.ip, join.channel);
+			Stroke[] initialStrokes = Stroke.getStrokes();
+			
+			int sendSize = 100;
+			String[] names = new String[sendSize];
+			int[] xs = new int[sendSize];
+			int[] ys = new int[sendSize];
+			for(int i = 0; i < initialStrokes.length; i++) {
+				int slot = i % sendSize;
+				names[slot] = initialStrokes[i].name;
+				xs[slot] = initialStrokes[i].x;
+				ys[slot] = initialStrokes[i].y;
+				if(slot == names.length - 1) {
+					ObjectNode jsonNode = Json.newObject();
+					jsonNode.put("names", Json.toJson(names));
+					jsonNode.put("xs", Json.toJson(xs));
+					jsonNode.put("ys", Json.toJson(ys));
+					join.channel.write(jsonNode);
+				}
+			}
+			sendSize = initialStrokes.length % sendSize;
+			if (sendSize > 0) {
+				ObjectNode jsonNode = Json.newObject();
+				jsonNode.put("names", Json.toJson(Arrays.copyOf(names, sendSize)));
+				jsonNode.put("xs", Json.toJson(Arrays.copyOf(xs, sendSize)));
+				jsonNode.put("ys", Json.toJson(Arrays.copyOf(ys, sendSize)));
+				join.channel.write(jsonNode);
+			}
 			getSender().tell("OK");
 		}
+		else if(message instanceof AttemptDraw)  {
+			AttemptDraw attemptDraw = (AttemptDraw) message;
+			getSender().tell(Stroke.createStroke(attemptDraw.ip, attemptDraw.name, attemptDraw.x, attemptDraw.y));
+		}
 		else if(message instanceof Draw)  {
-			Draw Draw = (Draw) message;
+			Draw draw = (Draw) message;
 			for(WebSocket.Out<JsonNode> channel : members.values()) {
-				ObjectNode event = Json.newObject();
-				event.put("ip", Draw.ip);
-				event.put("x", Draw.x);
-				event.put("y", Draw.y);
-
-				ArrayNode m = event.putArray("members");
+				ObjectNode jsonNode = Json.newObject();
+				jsonNode.put("name", draw.name);
+				jsonNode.put("x", draw.x);
+				jsonNode.put("y", draw.y);
+				ArrayNode m = jsonNode.putArray("members");
 				for(String u : members.keySet()) {
 					m.add(u);
 				}
-
-				channel.write(event);
+				channel.write(jsonNode);
 			}
-
 		}
 		else if(message instanceof Quit)  {
 			Quit quit = (Quit) message;
@@ -89,14 +140,22 @@ public class MainRoom extends UntypedActor {
 			this.ip = ip;
 			this.channel = channel;
 		}
-
 	}
-
-	public static class Draw {
-		final String ip;
-		final String x, y;
-		public Draw(String ip, String x, String y) {
+	
+	public static class AttemptDraw {
+		final String ip, name, x, y;
+		public AttemptDraw(String ip, String name, String x, String y) {
 			this.ip = ip;
+			this.name = name;
+			this.x = x;
+			this.y = y;
+		}
+	}
+	
+	public static class Draw {
+		final String name, x, y;
+		public Draw(String name, String x, String y) {
+			this.name = name;
 			this.x = x;
 			this.y = y;
 		}

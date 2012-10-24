@@ -1,39 +1,162 @@
 @(ip: String)
 
 @main(ip) {
-    <div class="page-header"></div>
-    <div id="onError" class="alert-message error"><p><strong>Oops!</strong> <span></span></p></div>
+    <div id="statusDiv" align="right"><p><strong><span>loading...</span></strong></p></div>
     
     <script src="http://www.html5canvastutorials.com/libraries/kinetic-v4.0.3.js"></script>
     <script type="text/javascript" charset="utf-8">
-		window.onload = function() {
-			var stage = new Kinetic.Stage({container: 'stage', width: 800, height: 600});
-			var bgLayer = new Kinetic.Layer();
-			var bgObject = new Kinetic.Rect({x: 0, y: 0, width: stage.getWidth(), height: stage.getHeight(), fill: 'lightgray'});
-			bgObject.on('mousedown', function() {
-                var mousePos = stage.getMousePosition();
-                socket.send(JSON.stringify({x : mousePos.x, y : mousePos.y}));
-            });
-            bgObject.moveToBottom();
-			bgLayer.add(bgObject);
-			stage.add(bgLayer);
+        var cooldown = @Application.getCooldown();
 
-            var fgLayer = new Kinetic.Layer();
+        var lastStrokeTime = 0;
+        var secondsTilReady = 0;
+        var isReady = false;
+	    function timer() {
+			var speed = 1000;
+			function instance() {
+				var secondsTilReady = parseInt((lastStrokeTime + cooldown - (new Date().getTime())) / 1000);
+				if(secondsTilReady >= 0) {
+					$("#statusDiv span").text(secondsTilReady + " seconds until you can add another stroke");
+					if(isReady) {
+                        flashBar(0, 80);
+                        isReady = false;
+                    }
+				}
+				else {
+					$("#statusDiv span").text("click on the canvas below to add a stroke");
+					if(!isReady) {
+						flashBar(120, 80);
+						isReady = true;
+					}
+				}
+				window.setTimeout(function(){instance();}, speed);
+			};
+			window.setTimeout(function(){instance();}, speed);
+		}
+
+	    var alpha = 0.0;
+	    function flashBar(hue, lum) {
+	    	var speed = 60;
+            function instance() {
+            	if(alpha > 0.0) {
+            		alpha -= 0.1;
+            		window.setTimeout(function(){instance();}, speed);
+            	}
+            	else alpha = 0;
+            	document.getElementById("statusDiv").style.backgroundColor = "hsla(" + hue + ", " + (alpha*80) + "%, " + lum + "%, " + alpha + ")";
+            };
+            alpha = 1.0
+            window.setTimeout(function(){instance();}, speed);
+	    }
+	    
+		window.onload = function() {
+			$("#statusDiv").show();
+            lastStrokeTime = @Stroke.getMostRecentTimestamp(ip);
+            timer();
+            
 			var socketType = window['MozWebSocket'] ? MozWebSocket: WebSocket;
 			var socket = new socketType("@routes.Application.joinMainRoom(ip).webSocketURL(request)");
 			socket.onmessage = function(event) {
-				var data = JSON.parse(event.data)
+				var data = JSON.parse(event.data);
 				if (data.error) {
-					socket.close()
-					$("#onError span").text(data.error)
-					$("#onError").show()
+					socket.close();
+					$("#statusDiv span").text(data.error);
 					return
 				}
-				var fgObject = new Kinetic.Circle({x: data.x, y: data.y, radius: 2, fill: 'black', strokeWidth: 0});
-				fgLayer.add(fgObject);
-				fgLayer.draw();
+				else if (data.timeTilReady) {
+                    lastStrokeTime = (new Date().getTime()) + data.timeTilReady - cooldown;
+                    flashBar(0, 80);
+                }
+				else if (data.newStrokeTime) lastStrokeTime = data.newStrokeTime;
+				else if (data.names) drawStrokes(data.names, data.xs, data.ys);
+				else if (data.name) drawStrokes([data.name], [data.x], [data.y]);
 			}
-			stage.add(fgLayer);
+            
+
+	        var strokeRadius = 4;
+            var strokeImage;
+            var strokeShapeGroup = new Kinetic.Group();
+            for(var i = 1; i <= strokeRadius; i++) {
+                var strokeShape = new Kinetic.Circle({
+                	x: strokeRadius, y: strokeRadius, radius: i,
+                	fill: 'black', opacity: 0.2 / i
+                });
+                strokeShapeGroup.add(strokeShape);
+            }
+            strokeShapeGroup.toImage({
+                width: strokeRadius * 2, height: strokeRadius * 2,
+                callback: function(img) {strokeImage = new Kinetic.Image({image: img});}
+            });
+
+            var stageWidth = $("#stage").width(), stageHeight = 600;
+            var stage = new Kinetic.Stage({container: 'stage', width: stageWidth, height: stageHeight});
+            
+            var boardLayer = new Kinetic.Layer();
+            var board = new Kinetic.Rect({
+                x: 0, y: 0, width: stageWidth, height: stageHeight,
+                fill: '#f9f9f9', opacity: 1
+            });
+            board.on('mousedown', function() {submitStroke();});
+            boardLayer.add(board);
+            stage.add(boardLayer);
+
+            var tooltipLayer = new Kinetic.Layer();
+            var tooltip = new Kinetic.Text({
+                x: stageWidth, y: stageHeight,
+                padding: 5, cornerRadius: 2,
+                fill: '#ffffff', opacity: 1, stroke: '#333333', strokeWidth: 2,
+                fontSize: 10, fontFamily: 'Calibri', fontStyle: 'italic', align: 'left', textFill: '#333333',
+                shadow: {color: 'black', blur: 1, offset: [5, 5], opacity: 0.2},
+            });
+            tooltip.on('mousedown', function() {submitStroke();});
+            tooltipLayer.add(tooltip);
+            
+            var strokeLayer = new Kinetic.Layer();
+            stage.add(strokeLayer);
+            stage.add(tooltipLayer);
+            
+            var strokeCount = 0;
+            var drawStrokes = function(names, xs, ys) {
+                for(var i = 0; i < names.length; i++) {
+                    addStroke(names[i], parseInt(xs[i]), parseInt(ys[i]), strokeLayer);
+                    strokeCount++;
+                    if(strokeCount > 1000) {
+                      strokeCount = 0;
+                      strokeLayer.draw();
+                      strokeLayer = new Kinetic.Layer();
+                      stage.remove(tooltipLayer);
+                      stage.add(strokeLayer);
+                      stage.add(tooltipLayer);
+                    }
+                }
+                strokeLayer.draw();
+            }
+            
+            var addStroke = function(name, x, y, layer) {
+                var stroke = new Kinetic.Image({
+                    image: strokeImage.getImage(), x: x - strokeRadius, y: y - strokeRadius
+                });
+                stroke.on('mouseover', function() {
+                    tooltip.setText('by ' + name);
+                    tooltip.setPosition(x + 15, y + 15);
+                    if(tooltip.getX() > (stageWidth - tooltip.getWidth())) tooltip.setX(x - tooltip.getWidth() - 5);
+                    if(tooltip.getY() > (stageHeight - tooltip.getHeight())) tooltip.setY(y - tooltip.getHeight() - 5);
+                    tooltipLayer.draw();
+                });
+                stroke.on('mouseout', function() {
+                    tooltip.setPosition(stageWidth, stageHeight);
+                    tooltipLayer.draw();
+                });
+                stroke.on('mousedown', function() {submitStroke();});
+                layer.add(stroke);
+            }
+            
+            var submitStroke = function() {
+            	if(secondsTilReady > 0) flashBar(0, 80);
+            	else {
+            	    var mousePos = stage.getMousePosition();
+            	    socket.send(JSON.stringify({name: $("#username").val(), x: mousePos.x, y: mousePos.y}));
+            	}
+            }
 		};
 	</script>
     <div id="stage"></div>

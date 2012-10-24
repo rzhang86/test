@@ -4,7 +4,7 @@
 
 <html>
     <head>
-        <title>ray's websocket test</title>
+        <title>the collaborative art project</title>
         <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/bootstrap.css")">
         <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
         <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
@@ -16,9 +16,9 @@
         <div class="topbar">
             <div class="fill">
                 <div class="container">
-                    <a class="brand" href="@routes.Application.index()">ray's websocket test</a>
+                    <a class="brand" href="@routes.Application.index()">the collaborative art project</a>
                     @if(connected != null) {
-                        <p class="pull-right">Your IP is @connected</p>
+                        <p class="pull-right">enter your name: <input id="username" name="username" class="input-small" type="text" maxlength="@Application.getMaxNameLength()" value="@Stroke.getMostRecentName(connected)"></p>
                     }
                 </div>
             </div>
@@ -28,9 +28,7 @@
                 @content
             </div>
             <footer>
-                <p>
-                    <a href="">todo, link</a>
-                </p>
+                <p>ray zhang</p>
             </footer>
         </div>
     </body>
